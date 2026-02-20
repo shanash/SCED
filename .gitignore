@@ -1,2 +1,7 @@
 .vscode/settings.json
 .mo
+
+# 작업 문서 (한국어 로컬라이제이션)
+.serena/
+plan-*.md
+*_plan.md
