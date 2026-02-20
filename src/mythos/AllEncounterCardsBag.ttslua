@@ -56,6 +56,24 @@ function buildIndex()
     end
   end
 
+  local cardCount = 0
+  for _ in pairs(cardIdIndex) do cardCount = cardCount + 1 end
+  local objectCount = 0
+  for _ in pairs(objectIdIndex) do objectCount = objectCount + 1 end
+  print("[EncounterBag] Index built: " .. cardCount .. " cards, " .. objectCount .. " objects")
+
+  -- Carcosa 카드 인덱스 확인 (디버그)
+  local testIds = {"03085", "03081", "03099", "01163", "01164", "01166"}
+  for _, tid in ipairs(testIds) do
+    local found = cardIdIndex[tid] ~= nil
+    if found then
+      local deck = next(cardIdIndex[tid].data["CustomDeck"])
+      print("[EncounterBag] Index check: " .. tid .. " = OK (DeckID:" .. tostring(deck) .. ")")
+    else
+      print("[EncounterBag] Index check: " .. tid .. " = NOT FOUND")
+    end
+  end
+
   indexingDone = true
 end
 
@@ -185,11 +203,17 @@ end
 
 -- attempt to replace cards / decks
 function onObjectSpawn(obj)
-  -- early exit if indices are empty
-  if next(cardIdIndex) == nil and next(objectIdIndex) == nil then return end
+  -- wait until index is fully built
+  if not indexingDone then
+    print("[EncounterBag] Index not ready, queueing: " .. (obj.getName() or obj.name or "unknown"))
+    Wait.time(function() onObjectSpawn(obj) end, 2)
+    return
+  end
 
   -- don't replace already replaced objects
   if obj.hasTag("Replaced") then return end
+
+  print("[EncounterBag] onObjectSpawn: type=" .. tostring(obj.type) .. " name=" .. tostring(obj.name) .. " nick=" .. tostring(obj.getName()))
 
   -- handle object depending on type
   if obj.type == "Card" then
@@ -208,12 +232,26 @@ end
 function handleSpawnedBag(bag)
   Wait.time(function()
     if bag ~= nil then
+      local bagName = bag.getName() or "unknown"
       local objData = bag.getData()
       if updateBagData(objData) then
+        print("[EncounterBag] Replaced cards in bag: " .. bagName)
+        local pos = bag.getPosition()
+        local rot = bag.getRotation()
         bag.destruct()
-        spawnObjectData({ data = objData })
+        objData["Transform"]["posX"] = pos.x
+        objData["Transform"]["posY"] = pos.y
+        objData["Transform"]["posZ"] = pos.z
+        objData["Transform"]["rotX"] = rot.x
+        objData["Transform"]["rotY"] = rot.y
+        objData["Transform"]["rotZ"] = rot.z
+        local newBag = spawnObjectData({ data = objData })
+        if newBag then
+          newBag.addTag("Replaced")
+        end
+      else
+        bag.addTag("Replaced")
       end
-      bag.addTag("Replaced")
     end
   end, 1)
 end
@@ -307,6 +345,7 @@ function updateBagData(bagData)
         if cardData then
           if updateOriginalItemData(objData, cardData.data) then
             changedSomething = true
+            print("[EncounterBag] Bag card replaced: " .. md.id .. " " .. (objData.Nickname or ""))
           end
         end
       end
@@ -366,6 +405,9 @@ function updateDeckData(deckData)
       deckData["CustomDeck"][k] = v
     end
 
+    local replacedCount = 0
+    for _ in pairs(cardIdConversion) do replacedCount = replacedCount + 1 end
+    print("[EncounterBag] Deck update: " .. replacedCount .. " card(s) replaced")
     return true
   end
 
