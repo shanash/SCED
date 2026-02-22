@@ -149,7 +149,11 @@ def main():
         choices=["build", "decompose"],
         help="Action to perform: build or decompose.",
     )
-    parser.add_argument("--moddir", required=True, help="The mod directory.")
+    parser.add_argument(
+        "--moddir",
+        default=str(Path(__file__).resolve().parent.parent),
+        help="The mod (project) directory. Defaults to the project root.",
+    )
     args = parser.parse_args()
 
     # Determine folder and command
