@@ -19,6 +19,7 @@ try:
 except ImportError:
     pygetwindow = None
 
+PLATFORM = platform.system()
 
 # Helper Functions
 
@@ -124,7 +125,6 @@ CONFIG = load_config()
 GAME_NAME = CONFIG["GAME_NAME"]
 HOTKEY = CONFIG["HOTKEY"]
 FORCE_GO = CONFIG["FORCE_GO"]
-PLATFORM = platform.system()
 WINDOW_TITLE = "Tabletop Simulator"
 
 
