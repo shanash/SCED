@@ -109,15 +109,20 @@ def load_savegame_in_TTS():
 
 
 def copy_preview_image(output_folder, branch):
-    image_name = GAME_NAME + ".png"
-    if branch and branch != "main":
-        image_name = GAME_NAME + "_dev.png"
+    base_image = Path(f"{GAME_NAME}.png")
+    dev_image = Path(f"{GAME_NAME}_dev.png")
 
-    image_path = Path(image_name)
-    if image_path.is_file():
-        shutil.copy(image_path, output_folder / f"{GAME_NAME}.png")
+    # Use dev image ONLY if on a non-main branch AND the file exists
+    if branch and branch != "main" and dev_image.exists():
+        source_image = dev_image
     else:
-        print(f"Note: Icon {image_name} not found, skipping copy.")
+        source_image = base_image
+
+    # Perform the copy (and maybe rename) with a safety check
+    if source_image.exists():
+        shutil.copy(source_image, output_folder / base_image)
+    else:
+        print(f"Note: Icon {source_image} not found, skipping copy.")
 
 
 # CONFIGURATION
