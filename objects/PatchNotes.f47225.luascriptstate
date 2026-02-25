@@ -85,7 +85,7 @@
       },
       "tooltip": "None",
       "value": [
-        "Arkham Horror LCG SCE 4.6.1 - 01/29/2026"
+        "Arkham Horror LCG SCE 4.7.0 - 02/27/2026"
       ]
     },
     {
@@ -124,7 +124,7 @@
       },
       "tooltip": "None",
       "value": [
-        "Hotfix Notes\n- more previewed cards for Core 2026\n- fixed a bug with saving/loading for the Playermats\n- fixed a bug with the Token Splash Screen\n\nNew Things\n- more previewed cards for Core 2026\n- added a logging system for manual counter changes\non playermats (can be disabled via option panel)\n- added a menu to fine-tune clue spending\n(right-click the master clue counter)\n- added \"Advance\" buttons to the Mythos Area (feedback appreciated!)\n- added helpers for Spirit Deck (Jim) and Hunch Deck (Joe)\n- added Elder Sign effect information to the token splash screen\n- enhanced buttons on Playermat\n- enhanced features on Favors of the Sun and Moon\n- added handling for new TTS features like drawing from the bottom of a deck\n- added automatic background swapping for challenge scenarios\n\nBugfixes\n- fixed an issue with readying cards on playermat extensions\n- fixed an issue with the Underworld Market helper\n- fixed some issues with language packs\n\nThis mod is a fan-made adaptation of Arkham Horror\nLCG. It is not endorsed by Fantasy Flight Games or\nAsmodee Digital. Please support the game by\npurchasing the official product."
+        "New things\n- added \/ updated cards from taboo list update (FAQ v2.5)\n- added \/ updated cards from core 2026\n- added cards from revised core set (yes, the one from 5 years ago)\n- added an \"arkham.build indicator\" to the download menu\n- added a game key for the \"Discard One\" function of the playermats\n- added custom tooltips for playermat buttons\n\nImprovements\n- updated language pack functionality for reprints and custom content\n- updated UI translations\n- updated upkeep function for some special cases (Wrecked by Nightmares, Marcus Sengstacke)\n- updated discard hotkey to take playermat extensions into account\n- updated the expansion guide (previously know as buyer's guide)\n- updated token splash screen with modifier for special tokens (bless, curse, frost)\n\nBugfixes\n- fixed some metadata issues (British Bulldog, parallel Lola)\n- fixed an issue with the \"load defaults\" button of the option panel\n- fixed an issue with the clue spending UI when some playermats are removed\n- fixed an issue with parallel Wendy's menu\n- fixed an issue with the mini card border creation\n- fixed an issue with the Attachment Helper spawning below the investigator card\n\nThis mod is a fan-made adaptation of Arkham Horror\nLCG. It is not endorsed by Fantasy Flight Games or\nAsmodee Digital. Please support the game by\npurchasing the official product."
       ]
     }
   ],
