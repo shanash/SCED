@@ -104,7 +104,7 @@
         "g": 1,
         "r": 1
       },
-      "font": "96",
+      "font": "91",
       "locked": false,
       "name": "Details",
       "pos": {
@@ -124,7 +124,7 @@
       },
       "tooltip": "None",
       "value": [
-        "New things\n- added \/ updated cards from taboo list update (FAQ v2.5)\n- added \/ updated cards from core 2026\n- added cards from revised core set (yes, the one from 5 years ago)\n- added an \"arkham.build indicator\" to the download menu\n- added a game key for the \"Discard One\" function of the playermats\n- added custom tooltips for playermat buttons\n\nImprovements\n- updated language pack functionality for reprints and custom content\n- updated UI translations\n- updated upkeep function for some special cases (Wrecked by Nightmares, Marcus Sengstacke)\n- updated discard hotkey to take playermat extensions into account\n- updated the expansion guide (previously know as buyer's guide)\n- updated token splash screen with modifier for special tokens (bless, curse, frost)\n\nBugfixes\n- fixed some metadata issues (British Bulldog, parallel Lola)\n- fixed an issue with the \"load defaults\" button of the option panel\n- fixed an issue with the clue spending UI when some playermats are removed\n- fixed an issue with parallel Wendy's menu\n- fixed an issue with the mini card border creation\n- fixed an issue with the Attachment Helper spawning below the investigator card\n\nThis mod is a fan-made adaptation of Arkham Horror\nLCG. It is not endorsed by Fantasy Flight Games or\nAsmodee Digital. Please support the game by\npurchasing the official product."
+        "New things\n- added / updated cards from taboo list update (FAQ v2.5)\n- added / updated cards from core 2026\n- added cards from revised core set (yes, the one from 5 years ago)\n- added an \"arkham.build indicator\" to the download menu\n- added a game key for the \"Discard One\" function of the playermats\n- added custom tooltips for playermat buttons\n\nImprovements\n- updated language pack functionality for reprints and custom content\n- updated UI translations\n- updated upkeep function for some special cases (Wrecked by Nightmares, Marcus Sengstacke)\n- updated discard hotkey to take playermat extensions into account\n- updated the expansion guide (previously know as buyer's guide)\n- updated token splash screen with modifier for special tokens (bless, curse, frost)\n\nBugfixes\n- fixed an issue with the clue spending UI when some playermats are removed\n- fixed some metadata issues (British Bulldog, parallel Lola)\n- fixed an issue with the \"load defaults\" button of the option panel\n- fixed an issue with parallel Wendy's menu\n- fixed an issue with the mini card border creation\n- fixed an issue with the Attachment Helper spawning\nbelow the investigator card\n\nThis mod is a fan-made adaptation of Arkham Horror LCG.\nIt is not endorsed by Fantasy Flight Games or Asmodee Digital.\nPlease support the game by purchasing the official product."
       ]
     }
   ],
