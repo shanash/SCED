@@ -12,7 +12,7 @@
     }
   },
   "Description": "The Entertainer",
-  "GMNotes_path": "StarterDecks2026-PreviewCards.starters2026/MarieLambeau.60451.gmnotes",
+  "GMNotes_path": "AdditionalPlayerCards.2cba6b/MarieLambeau.60451.gmnotes",
   "GUID": "60451",
   "LuaScript": "require(\"playercards/CardsWithPhaseButtons\")",
   "Name": "Card",
