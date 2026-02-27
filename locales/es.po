@@ -571,6 +571,9 @@ msgid "CUH_removeDrawnLines_description"
 msgstr "Controla si se deberían remover las líneas dibujadas."
 
 # Cards
+msgid "CARD_BorrowedTime_remove_text"
+msgstr "Retira los clics"
+
 msgid "CARD_DarkHorse_text"
 msgstr "☐ Skip resource"
 

@@ -577,6 +577,9 @@ msgid "CUH_removeDrawnLines_description"
 msgstr "Dies entfernt alle gezeichneten Linien."
 
 # Cards
+msgid "CARD_BorrowedTime_remove_text"
+msgstr "Ticken entfernen"
+
 msgid "CARD_DarkHorse_text"
 msgstr "☐ Keine Ressource"
 
