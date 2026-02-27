@@ -19,7 +19,7 @@ function onLoad(savedData)
 end
 
 function searchSelfForTokens()
-  clickableResourceCounter = nil
+  local clickableResourceCounter
   local foundTokens = 0
 
   for _, obj in ipairs(SearchLib.onObject(self, "isTileOrToken", 0.8)) do
@@ -32,11 +32,11 @@ function searchSelfForTokens()
       break
     end
   end
-  return foundTokens
+  return foundTokens, clickableResourceCounter
 end
 
 function removeClicks(player)
-  local foundTokens = searchSelfForTokens()
+  local foundTokens, clickableResourceCounter = searchSelfForTokens()
 
   if clickableResourceCounter then
     clickableResourceCounter.call("updateVal", 0)
@@ -48,6 +48,7 @@ function removeClicks(player)
       end
     end
   end
+
   if foundTokens > 0 then
     addAction(player, foundTokens)
   else
@@ -57,12 +58,28 @@ end
 
 function addAction(player, foundTokens)
   -- only spawn a maximum of 3 action tokens
-  if foundTokens > 3 then
-    numTokens = 3
-  else
-    numTokens = foundTokens
+  local numTokens = math.min(foundTokens, 3)
+  local positions = getSpawnPositions(numTokens)
+
+  for i = 1, numTokens do
+    TokenManagerApi.spawnToken(positions[i], "universalActionAbility", self.getRotation(), "multiplyScale", 0.6, nil, "Temporary")
   end
 
-  TokenManagerApi.spawnTokenGroup(self, "universalActionAbility", numTokens, 1.3, nil, true)
-  broadcastToColor("Spawning " .. numTokens.." temporary action token(s).", player.color)
+  broadcastToColor("Spawning " .. numTokens .. " temporary action token(s).", player.color)
+end
+
+-- work out the token spawn positions
+local baseOffset   = 0.3
+local offsetList   = { -2, -1, 0, 1, 2 }
+local countToIndex = { { 3 }, { 2, 4 }, { 1, 3, 5 } }
+
+function getSpawnPositions(count)
+  local positions = {}
+
+  for _, index in ipairs(countToIndex[count]) do
+    local pos = Vector(offsetList[index] * baseOffset, 1, 0.75)
+    table.insert(positions, self.positionToWorld(pos))
+  end
+
+  return positions
 end
