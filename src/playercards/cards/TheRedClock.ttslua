@@ -73,7 +73,7 @@ function takeAll(player)
   local playerColor   = PlayermatApi.getPlayerColor(matColor)
   local name          = GlobalApi.getColoredName(playerColor)
   local messageString = "Moved " .. foundTokens .. " resource(s) to " .. name .. "'s resource pool"
-  if notes.id == "08058" then
+  if notes.id == "08058" or notes.id == "60384" then
     Wait.time(function() addCharge(player) end, 0.5)
     messageString = messageString .. " and placed one charge"
   end
@@ -83,7 +83,7 @@ end
 
 function addAction(player)
   local numTokens
-  if notes.id == "08058" then
+  if notes.id == "08058" or notes.id == "60384" then
     numTokens = 2
     broadcastToColor("Spawning two temporary action tokens.", player.color)
   else
