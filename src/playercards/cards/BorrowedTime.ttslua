@@ -1,0 +1,85 @@
+require("playercards/CardsWithHelper")
+local SearchLib       = require("util/SearchLib")
+local TokenManagerApi = require("tokens/TokenManagerApi")
+
+-- intentionally global
+hasXML                = true
+isHelperEnabled       = false
+
+function updateSave()
+  self.script_state = JSON.encode({ isHelperEnabled = isHelperEnabled })
+end
+
+function onLoad(savedData)
+  if savedData and savedData ~= "" then
+    local loadedData = JSON.decode(savedData)
+    isHelperEnabled = loadedData.isHelperEnabled
+    if isHelperEnabled then updateDisplay() end
+  end
+end
+
+function searchSelfForTokens()
+  local clickableResourceCounter
+  local foundTokens = 0
+
+  for _, obj in ipairs(SearchLib.onObject(self, "isTileOrToken", 0.8)) do
+    local memo = obj.getMemo()
+    if memo == "click" or memo == "resource" then
+      foundTokens = foundTokens + math.abs(obj.getQuantity())
+    elseif memo == "resourceCounter" then
+      foundTokens = obj.getVar("val")
+      clickableResourceCounter = obj
+      break
+    end
+  end
+  return foundTokens, clickableResourceCounter
+end
+
+function removeClicks(player)
+  local foundTokens, clickableResourceCounter = searchSelfForTokens()
+
+  if clickableResourceCounter then
+    clickableResourceCounter.call("updateVal", 0)
+  else
+    for _, obj in ipairs(SearchLib.onObject(self, "isTileOrToken", 0.8)) do
+      local memo = obj.getMemo()
+      if memo == "click" or memo == "resource" then
+        obj.destruct()
+      end
+    end
+  end
+
+  if foundTokens > 0 then
+    addAction(player, foundTokens)
+  else
+    broadcastToColor("No clicks found!", player.color)
+  end
+end
+
+function addAction(player, foundTokens)
+  -- only spawn a maximum of 3 action tokens
+  local numTokens = math.min(foundTokens, 3)
+  local positions = getSpawnPositions(numTokens)
+
+  for i = 1, numTokens do
+    TokenManagerApi.spawnToken(positions[i], "universalActionAbility", self.getRotation(), "multiplyScale", 0.6, nil, "Temporary")
+  end
+
+  broadcastToColor("Spawning " .. numTokens .. " temporary action token(s).", player.color)
+end
+
+-- work out the token spawn positions
+local baseOffset   = 0.3
+local offsetList   = { -2, -1, 0, 1, 2 }
+local countToIndex = { { 3 }, { 2, 4 }, { 1, 3, 5 } }
+
+function getSpawnPositions(count)
+  local positions = {}
+
+  for _, index in ipairs(countToIndex[count]) do
+    local pos = Vector(offsetList[index] * baseOffset, 1, 0.75)
+    table.insert(positions, self.positionToWorld(pos))
+  end
+
+  return positions
+end

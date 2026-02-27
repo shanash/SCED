@@ -5124,6 +5124,14 @@ function addUseName(obj, params)
   end
 end
 
+function multiplyScale(obj, mult)
+  Wait.frames(function()
+    if obj ~= nil then
+      obj.setScale(obj.getScale():scale(Vector(mult, 1, mult)))
+    end
+  end, 5)
+end
+
 ---------------------------------------------------------
 -- Utility functions
 ---------------------------------------------------------
