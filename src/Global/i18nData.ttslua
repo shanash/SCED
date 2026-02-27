@@ -68,9 +68,9 @@ I18N_DATA = {
     ["zh_TW"] = "選項",
   },
   ["CARD_BorrowedTime_remove_text"] = {
-    ["de"] = "Remove clicks",
+    ["de"] = "Ticken entfernen",
     ["en"] = "Remove clicks",
-    ["es"] = "Remove clicks",
+    ["es"] = "Retira los clics",
     ["fr"] = "Remove clicks",
     ["it"] = "Remove clicks",
     ["ko"] = "Remove clicks",
