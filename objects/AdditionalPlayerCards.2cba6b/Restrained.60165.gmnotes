@@ -1,0 +1,11 @@
+{
+  "id": "60165",
+  "type": "Event",
+  "class": "Guardian",
+  "cost": 1,
+  "level": 0,
+  "traits": "Tactic.",
+  "agilityIcons": 1,
+  "willpowerIcons": 1,
+  "cycle": "Starters 2026"
+}

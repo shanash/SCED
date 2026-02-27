@@ -1,0 +1,26 @@
+{
+  "CardID": 6017200,
+  "CustomDeck": {
+    "60172": {
+      "BackIsHidden": true,
+      "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+      "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16007888524466124106/392AACF9D83975164BF2BADF221914D937E19687/",
+      "NumHeight": 1,
+      "NumWidth": 1,
+      "Type": 0
+    }
+  },
+  "GMNotes_path": "AdditionalPlayerCards.2cba6b/ExtendedBarrel1.60172.gmnotes",
+  "GUID": "60172",
+  "Name": "Card",
+  "Nickname": "Extended Barrel (1)",
+  "Tags": [
+    "PlayerCard"
+  ],
+  "Transform": {
+    "rotY": 270,
+    "scaleX": 1,
+    "scaleY": 1,
+    "scaleZ": 1
+  }
+}
