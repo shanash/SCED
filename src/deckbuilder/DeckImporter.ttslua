@@ -793,7 +793,7 @@ end
 function handleCustomizableUpgrades(cardList, deckMeta)
   for _, card in ipairs(cardList) do
     if card.metadata.type == "UpgradeSheet" then
-      local baseId = string.sub(card.metadata.id, 1, 5)
+      local baseId   = getBaseId(card.metadata.id)
       local upgrades = deckMeta["cus_" .. baseId]
 
       if upgrades ~= nil then
@@ -801,16 +801,16 @@ function handleCustomizableUpgrades(cardList, deckMeta)
         local selectedUpgrades = {}
 
         -- contains the amount of inputValues per row (starting at row 0)
-        local index_xp = {}
+        local indexXp = {}
 
         -- get the index and xp values (looks like this: X|X,X|X, ..)
         -- input string from ArkhamDB is split by ","
         for str in string.gmatch(upgrades, "([^,]+)") do
-          table.insert(index_xp, str)
+          table.insert(indexXp, str)
         end
 
         -- split each pair and assign it to the proper position in markedBoxes
-        for _, entry in ipairs(index_xp) do
+        for _, entry in ipairs(indexXp) do
           -- counter increments from 1 to 3 and indicates the part of the string we are on
           -- usually: 1 = row, 2 = amount of check boxes, 3 = entry in inputfield
           local counter = 0
