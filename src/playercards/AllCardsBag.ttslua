@@ -56,6 +56,7 @@ local OFFICIAL_CYCLE_MAP     = {
   -- campaigns
   ["investigator packs"]                = true,
   ["core"]                              = true,
+  ["revised core"]                      = true,
   ["the dunwich legacy"]                = true,
   ["the path to carcosa"]               = true,
   ["the forgotten age"]                 = true,
@@ -66,7 +67,8 @@ local OFFICIAL_CYCLE_MAP     = {
   ["the scarlet keys"]                  = true,
   ["the feast of hemlock vale"]         = true,
   ["the drowned city"]                  = true,
-  --["core 2026"]                         = true,
+  --["core 2026"]                       = true,
+  --["starters 2026"]                   = true,
   -- standalones / parallels etc.
   ["standalone"]                        = true,
   ["the blob that ate everything else"] = true,

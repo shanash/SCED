@@ -1,0 +1,26 @@
+{
+  "CardID": 6016500,
+  "CustomDeck": {
+    "60165": {
+      "BackIsHidden": true,
+      "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+      "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/10337357041528224152/121FE56A7C1E4B7D6A85E287FB3304E1F0E4C669/",
+      "NumHeight": 1,
+      "NumWidth": 1,
+      "Type": 0
+    }
+  },
+  "GMNotes_path": "AdditionalPlayerCards.2cba6b/Restrained.60165.gmnotes",
+  "GUID": "60165",
+  "Name": "Card",
+  "Nickname": "Restrained",
+  "Tags": [
+    "PlayerCard"
+  ],
+  "Transform": {
+    "rotY": 270,
+    "scaleX": 1,
+    "scaleY": 1,
+    "scaleZ": 1
+  }
+}
