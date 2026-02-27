@@ -559,6 +559,9 @@ msgid "CUH_removeDrawnLines_description"
 msgstr "그려진 모든 선을 제거할지 여부를 제어합니다."
 
 # Cards
+msgid "CARD_BorrowedTime_remove_text"
+msgstr "Remove Clicks"
+
 msgid "CARD_DarkHorse_text"
 msgstr "☐ 자원 받지 않기"
 

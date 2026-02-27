@@ -558,6 +558,9 @@ msgid "CUH_removeDrawnLines_description"
 msgstr "控制是否要清除所有的繪製的綫條。"
 
 # Cards
+msgid "CARD_BorrowedTime_remove_text"
+msgstr "Remove Clicks"
+
 msgid "CARD_DarkHorse_text"
 msgstr "☐ 不獲得資源"
 

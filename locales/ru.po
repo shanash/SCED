@@ -570,6 +570,9 @@ msgid "CUH_removeDrawnLines_description"
 msgstr "Определяет, следует ли удалять все нарисованные линии."
 
 # Cards
+msgid "CARD_BorrowedTime_remove_text"
+msgstr "Remove Clicks"
+
 msgid "CARD_DarkHorse_text"
 msgstr "☐ Не получать ресурс"
 
