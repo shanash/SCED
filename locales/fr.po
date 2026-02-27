@@ -573,6 +573,9 @@ msgid "CUH_removeDrawnLines_description"
 msgstr "Définit si les lignes tracées doivent être effacées"
 
 # Cards
+msgid "CARD_BorrowedTime_remove_text"
+msgstr "Remove Clicks"
+
 msgid "CARD_DarkHorse_text"
 msgstr "☐ Ne pas gagner de ressource"
 

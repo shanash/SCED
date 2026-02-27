@@ -570,6 +570,9 @@ msgid "CUH_removeDrawnLines_description"
 msgstr "Bepaalt of alle getekende lijnen moeten worden verwijderd."
 
 # Cards
+msgid "CARD_BorrowedTime_remove_text"
+msgstr "Remove Clicks"
+
 msgid "CARD_DarkHorse_text"
 msgstr "☐ Skip resource"
 
