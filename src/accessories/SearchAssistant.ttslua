@@ -24,6 +24,7 @@ local buttonLabels             = {
 
 function onLoad()
   createClickFunctions()
+  createContextMenu()
   normalView()
   self.max_typed_number = 99
 end
@@ -32,6 +33,46 @@ function createClickFunctions()
   for _, data in ipairs(buttonLabels) do
     _G["search" .. data.label] = function(_, playerColor, isRightClick) startSearch(playerColor, data.label) end
   end
+end
+
+function createContextMenu()
+  self.clearContextMenu()
+  self.addContextMenuItem("Search Starting", function(triggeringColor)
+    if ongoingSearch then return end
+    getColors()
+
+    if owner == "Mythos" then
+      printToColor("This only works for playermats.", triggeringColor, "Red")
+      return
+    end
+
+    local deckAreaObjects = PlayermatApi.getDeckAreaObjects(matColor)
+    if not deckAreaObjects.draw then
+      printToColor("Couldn't find your deck.", triggeringColor, "Red")
+      return
+    end
+
+    local deckData = deckAreaObjects.draw.getData().ContainedObjects
+
+    local count = 0
+    for i = #deckData, 1, -1 do
+      local cardInfo = deckData[i]
+      local md       = JSON.decode(cardInfo.GMNotes) or {}
+      if md.starting then
+        count = count + 1
+        deckAreaObjects.draw.takeObject({ index = i - 1 }).deal(1, handColor)
+        printToColor("Starting: Added " .. cardInfo.Nickname .. " to the hand.", triggeringColor)
+      end
+    end
+
+    if count == 0 then
+      printToColor("Your deck does not contain any starting cards.", triggeringColor, "Orange")
+    elseif count > 1 then
+      printToColor(
+        "Choose one card among the starting cards that were added by this to your hand and return the others to your deck.",
+        triggeringColor, "Green")
+    end
+  end)
 end
 
 -- regular view with search box
@@ -60,10 +101,7 @@ function onNumberTyped(playerColor, number)
   end
 end
 
--- start the search (change UI, draw cards)
-function startSearch(messageColor, number)
-  if ongoingSearch then return end
-
+function getColors()
   -- intentionally global
   owner = GUIDReferenceApi.getOwnerOfObject(self)
   if owner == "Mythos" then
@@ -77,6 +115,13 @@ function startSearch(messageColor, number)
     matColor  = owner
     handColor = PlayermatApi.getPlayerColor(matColor)
   end
+end
+
+-- start the search (change UI, draw cards)
+function startSearch(messageColor, number)
+  if ongoingSearch then return end
+
+  getColors()
 
   topCardDetected = false
 
