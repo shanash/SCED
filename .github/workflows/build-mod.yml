@@ -1,7 +1,7 @@
 name: build-mod
 on:
   push:
-    branches: [main]
+    branches: [korean]
   workflow_dispatch:
   release:
     types: [created]
