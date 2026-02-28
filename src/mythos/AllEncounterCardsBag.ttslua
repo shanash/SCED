@@ -3,9 +3,10 @@ require("core/Constants")
 local CardSpawner        = require("playercards/CardSpawner")
 local CoroutineLib       = require("util/CoroutineLib")
 
-local cardIdIndex        = {}
-local objectIdIndex      = {}
-local indexingDone       = false
+local cardIdIndex            = {}
+local objectIdIndex          = {}
+local indexingDone           = false
+local sceneObjectsReplaced   = false
 
 local REPLACEMENT_FIELDS = {
   "CardID",
@@ -57,6 +58,9 @@ function buildIndex()
   end
 
   indexingDone = true
+
+  -- after index rebuild, check if scene objects need replacement (runs once)
+  Wait.frames(replaceSceneObjects, 10)
 end
 
 -- TODO: unify this with the AllCardsBag
@@ -157,6 +161,53 @@ end
 function getObjectById(params)
   if not isIndexReady() then return {} end
   return objectIdIndex[params.id]
+end
+
+-- replaces scene objects (e.g. rule PDFs, phase reference) with Korean versions from the index (runs once)
+function replaceSceneObjects()
+  if sceneObjectsReplaced then return end
+  if not isIndexReady() then return end
+
+  local hasKoreanData = objectIdIndex["LatestFAQ"]
+      or objectIdIndex["LearnToPlay"]
+      or objectIdIndex["RulesReference"]
+      or cardIdIndex["PhaseReference"]
+  if not hasKoreanData then return end
+
+  sceneObjectsReplaced = true
+
+  for _, obj in ipairs(getObjects()) do
+    if obj ~= self then
+      local success, md = pcall(function() return JSON.decode(obj.getGMNotes()) end)
+      if success and md and md.id then
+        local tags = obj.getTags()
+        local alreadyReplaced = false
+        for _, tag in ipairs(tags) do
+          if tag == "Replaced" then alreadyReplaced = true; break end
+        end
+
+        if not alreadyReplaced then
+          local indexData
+          if obj.type == "Custom_PDF" then
+            indexData = getObjectById({ id = md.id })
+          elseif obj.type == "Card" then
+            indexData = getCardById({ id = md.id })
+          end
+
+          if indexData then
+            local objData = obj.getData()
+            if updateOriginalItemData(objData, indexData.data) then
+              local pos = obj.getPosition()
+              local rot = obj.getRotation()
+              obj.destruct()
+              spawnObjectData({ data = objData, position = pos, rotation = rot })
+              print("[EncounterBag] Scene object replaced: " .. md.id)
+            end
+          end
+        end
+      end
+    end
+  end
 end
 
 function onObjectEnterContainer(container)

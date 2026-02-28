@@ -820,3 +820,16 @@ msgstr ""
 # Play Area
 msgid "PA_readyCards"
 msgstr "플레이 영역의 카드 준비시키기 ↺"
+
+# Korean Language Pack Download Messages
+msgid "KO_downloadStart"
+msgstr "한국어 언어팩을 다운로드 중입니다..."
+
+msgid "KO_downloadFail"
+msgstr "다운로드 실패: "
+
+msgid "KO_downloadManual"
+msgstr "수동 다운로드: 다운로드 창 > 언어 팩"
+
+msgid "KO_downloadComplete"
+msgstr "한국어 언어팩 설치 완료!"

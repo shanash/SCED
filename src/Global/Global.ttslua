@@ -242,6 +242,9 @@ function onLoad(savedData)
 
   -- This one formatter will handle all manual counter changes
   MessageQueue.registerFormatter("manual_counter_change", formatManualCounterChange)
+
+  -- auto-download Korean language packs if language is set to Korean
+  Wait.time(autoDownloadKoreanPacks, 5)
 end
 
 function formatManualCounterChange(playerColor, messages)
@@ -1936,10 +1939,98 @@ function placeholder_download(params)
     end
   end
 
-  local url = SOURCE_REPO .. params.filename .. ".json"
+  -- use R2 URL for Korean language packs (self-hosted, more complete data)
+  local url = params.url
+  if not url then
+    for _, pack in ipairs(KOREAN_LANGPACK) do
+      if pack.filename == params.filename then
+        url = pack.url
+        if pack.replaceSceneObjects then
+          params.replaceSceneObjects = true
+        end
+        break
+      end
+    end
+  end
+  url = url or (SOURCE_REPO .. params.filename .. ".json")
   requestObj = WebRequest.get(url, function(request) contentDownloadCallback(request, params) end)
 
   CoroutineLib.start(downloadCoroutine)
+end
+
+-- auto-downloads Korean language packs from R2 when language is set to Korean
+function autoDownloadKoreanPacks()
+  if optionPanel.uiLanguage ~= "ko" then return end
+
+  -- check if Korean packs are already installed
+  local encounterBag = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "AllEncounterCardsBag")
+  if encounterBag then
+    for _, obj in ipairs(encounterBag.getObjects()) do
+      if obj.nickname == "Korean - Campaigns" then return end
+    end
+  end
+
+  broadcastToAll(i18n.getStrById("KO_downloadStart") or "Downloading Korean language packs...", "Blue")
+
+  local function downloadSequence()
+    for i, pack in ipairs(KOREAN_LANGPACK) do
+      local downloadComplete = false
+      local downloadSuccess = false
+
+      local url = pack.url
+      requestObj = WebRequest.get(url, function(request)
+        if request.is_error or request.response_code ~= 200 then
+          broadcastToAll(
+            (i18n.getStrById("KO_downloadFail") or "Download failed: ") .. (pack.bagName or ""),
+            "Red"
+          )
+        else
+          contentDownloadCallback(request, {
+            filename = pack.filename,
+            type = "language-pack",
+            addToEncounterCards = pack.addToEncounterCards,
+            addToPlayerCards = pack.addToPlayerCards,
+            replaceSceneObjects = pack.replaceSceneObjects,
+            name = pack.bagName
+          })
+          downloadSuccess = true
+        end
+        downloadComplete = true
+      end)
+
+      -- progress UI
+      UI.setAttribute("download_progress", "active", true)
+      while not downloadComplete do
+        if requestObj then
+          UI.setAttribute("download_progress", "percentage", requestObj.download_progress * 100)
+        end
+        CoroutineLib.yieldFrames()
+      end
+      UI.setAttribute("download_progress", "percentage", 100)
+      CoroutineLib.yieldFrames(30)
+      UI.setAttribute("download_progress", "active", false)
+
+      if not downloadSuccess then
+        broadcastToAll(
+          i18n.getStrById("KO_downloadManual") or "Manual download: Download Window > Language Packs",
+          "Orange"
+        )
+        return
+      end
+
+      -- wait for spawn stabilization before next download
+      if i < #KOREAN_LANGPACK then
+        CoroutineLib.yieldSeconds(3)
+      end
+    end
+
+    broadcastToAll(
+      i18n.getStrById("KO_downloadComplete") or "Korean language packs installed!",
+      "Green"
+    )
+  end
+
+  CoroutineLib.start(downloadSequence)
 end
 
 -- spawns a bag that contains every object from the library
@@ -2463,6 +2554,48 @@ function formatLibrary(jsonResponse)
       library[contentType] = {}
     end
     table.insert(library[contentType], item)
+  end
+end
+
+-- injects Korean-specific entries into the library that aren't in the upstream library.json
+function injectKoreanLibraryEntries()
+  if not library["language-pack"] then
+    library["language-pack"] = {}
+  end
+
+  -- add entries from KOREAN_LANGPACK that don't already exist in the library
+  for _, pack in ipairs(KOREAN_LANGPACK) do
+    local exists = false
+    for _, entry in ipairs(library["language-pack"]) do
+      if entry.filename == pack.filename then
+        exists = true
+        break
+      end
+    end
+
+    if not exists then
+      -- find the last "Korean" entry to insert after it
+      local insertPos = #library["language-pack"] + 1
+      for i, entry in ipairs(library["language-pack"]) do
+        if entry.name and string.find(entry.name, "^Korean") then
+          insertPos = i + 1
+        end
+      end
+
+      table.insert(library["language-pack"], insertPos, {
+        name = pack.bagName,
+        type = "language-pack",
+        author = "Fantasy Flight Games",
+        decomposed = true,
+        filename = pack.filename,
+        boxsize = "big",
+        url = pack.url,
+        addToEncounterCards = pack.addToEncounterCards,
+        addToPlayerCards = pack.addToPlayerCards,
+        replaceSceneObjects = pack.replaceSceneObjects,
+        description = pack.description or "This will replace the corresponding cards for all purposes!"
+      })
+    end
   end
 end
 
@@ -3273,6 +3406,65 @@ function updateGlobalXml(newXml)
   UI.setXmlTable(newXml)
 end
 
+local SCENE_REPLACE_FIELDS = {
+  "CustomPDF", "CustomImage", "CustomMesh", "CustomDeck", "CardID",
+  "Nickname", "Description", "Name"
+}
+
+-- replaces scene objects on the table with matching objects from langpack data
+function replaceLangpackSceneObjects(jsonText)
+  local langpackData = JSON.decode(jsonText)
+  if not langpackData or not langpackData.ContainedObjects then
+    print("[LangReplace] No ContainedObjects found in langpack data")
+    return
+  end
+
+  print("[LangReplace] Processing " .. #langpackData.ContainedObjects .. " objects")
+
+  for i, replaceData in ipairs(langpackData.ContainedObjects) do
+    if replaceData.GMNotes and replaceData.GMNotes ~= "" then
+      local success, md = pcall(function() return JSON.decode(replaceData.GMNotes) end)
+      if success and md and md.id then
+        print("[LangReplace] Looking for scene object: " .. md.id)
+        local found = false
+        for _, sceneObj in ipairs(getObjects()) do
+          local ok, sceneMd = pcall(function() return JSON.decode(sceneObj.getGMNotes()) end)
+          if ok and sceneMd and sceneMd.id == md.id then
+            if sceneObj.hasTag("Replaced") then
+              print("[LangReplace] " .. md.id .. " already has Replaced tag, skipping")
+              found = true
+              break
+            end
+            local objData = sceneObj.getData()
+            for _, field in ipairs(SCENE_REPLACE_FIELDS) do
+              if replaceData[field] and replaceData[field] ~= "" then
+                objData[field] = replaceData[field]
+              end
+            end
+            objData.Tags = objData.Tags or {}
+            table.insert(objData.Tags, "Replaced")
+
+            local pos = sceneObj.getPosition()
+            local rot = sceneObj.getRotation()
+            sceneObj.destruct()
+            spawnObjectData({ data = objData, position = pos, rotation = rot })
+            broadcastToAll("Replaced: " .. (replaceData.Nickname or md.id), "Green")
+            found = true
+            break
+          end
+        end
+        if not found then
+          print("[LangReplace] Scene object NOT found for: " .. md.id)
+        end
+      else
+        print("[LangReplace] Object " .. i .. " has invalid GMNotes")
+      end
+    else
+      print("[LangReplace] Object " .. i .. " has no GMNotes")
+    end
+  end
+end
+
 -- called after the webrequest of downloading an item
 -- deletes the placeholder and spawns the downloaded item
 function contentDownloadCallback(request, params)
@@ -3282,6 +3474,11 @@ function contentDownloadCallback(request, params)
   if request.is_error or request.response_code ~= 200 then
     print('Error: ' .. request.error)
     return
+  end
+
+  -- replace scene objects directly from langpack data before spawning
+  if params.replaceSceneObjects then
+    replaceLangpackSceneObjects(request.text)
   end
 
   -- initiate content spawning
@@ -3408,6 +3605,7 @@ function libraryDownloadCallback(request)
   local jsonResponse = nil
   if pcall(function() jsonResponse = JSON.decode(request.text) end) then
     formatLibrary(jsonResponse)
+    injectKoreanLibraryEntries()
     updateDownloadItemList()
     Wait.time(function() printToAll("XML UI initialized.", "Green") end, 0.3)
   else

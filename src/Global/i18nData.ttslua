@@ -600,6 +600,22 @@ I18N_DATA = {
     ["zh_CN"] = "可下载内容",
     ["zh_TW"] = "可下載内容",
   },
+  ["KO_downloadComplete"] = {
+    ["en"] = "Korean language packs installed!",
+    ["ko"] = "한국어 언어팩 설치 완료!",
+  },
+  ["KO_downloadFail"] = {
+    ["en"] = "Download failed: ",
+    ["ko"] = "다운로드 실패: ",
+  },
+  ["KO_downloadManual"] = {
+    ["en"] = "Manual download: Download Window > Language Packs",
+    ["ko"] = "수동 다운로드: 다운로드 창 > 언어 팩",
+  },
+  ["KO_downloadStart"] = {
+    ["en"] = "Downloading Korean language packs...",
+    ["ko"] = "한국어 언어팩을 다운로드 중입니다...",
+  },
   ["MA_advance_text"] = {
     ["de"] = "Vorrücken ↪",
     ["en"] = "Advance ↪",
