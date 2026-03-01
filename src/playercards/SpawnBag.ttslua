@@ -82,10 +82,16 @@ do
     -- Limit to one placement at a time
     if placedSpecs[spawnSpec.name] or spawnSpec == nil or spawnSpec.cards == nil then return end
 
+    -- Wait for card index to be ready (may be rebuilding after langpack download)
+    if not AllCardsBagApi.isIndexReady() then
+      broadcastToAll("Card index is being rebuilt, please wait a moment and try again.", "Orange")
+      return
+    end
+
     local cardsToSpawn = {}
     for _, cardId in ipairs(spawnSpec.cards) do
       local card = AllCardsBagApi.getCardById(cardId)
-      if card ~= nil then
+      if card ~= nil and card.data ~= nil then
         table.insert(cardsToSpawn, card)
       end
     end
