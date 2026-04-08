@@ -199,7 +199,7 @@ function replaceSceneObjects()
             indexData = getCardById({ id = md.id })
           end
 
-          if indexData then
+          if indexData and indexData.data then
             local objData = obj.getData()
             if updateOriginalItemData(objData, indexData.data) then
               local pos = obj.getPosition()
