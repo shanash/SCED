@@ -129,7 +129,7 @@ do
   -- Ensure that On the Mend has 1-per-investigator copies set aside
   local function maybeAddOnTheMend(slots)
     if slots["09006"] ~= nil then
-      slots["09006"] = PlayAreaApi.getInvestigatorCount()
+      slots["09006"] = PlayAreaApi.getInvestigatorCount() or 4
     end
   end
 
