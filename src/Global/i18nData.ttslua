@@ -2141,6 +2141,22 @@ I18N_DATA = {
     ["zh_CN"] = "重整游戏区域内的卡牌 ↺",
     ["zh_TW"] = "準備遊戲區域內的卡牌 ↺",
   },
+  ["PA_selectLocation"] = {
+    ["en"] = "Select / hover one or two locations and try again.",
+    ["ko"] = "하나 또는 두 개의 장소를 선택/호버한 후 다시 시도하세요.",
+  },
+  ["PA_toggledConnections"] = {
+    ["en"] = "Toggled all relevant connections for ",
+    ["ko"] = "관련 연결을 모두 전환했습니다: ",
+  },
+  ["PA_noConnections"] = {
+    ["en"] = "No relevant connections to toggle found for ",
+    ["ko"] = "전환할 관련 연결을 찾지 못했습니다: ",
+  },
+  ["PA_connection"] = {
+    ["en"] = "Connection: ",
+    ["ko"] = "연결: ",
+  },
   ["PMB_discard1_button"] = {
     ["de"] = "Karte abwerfen",
     ["en"] = "Discard 1",

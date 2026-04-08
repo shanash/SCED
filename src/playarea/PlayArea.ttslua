@@ -96,7 +96,7 @@ function onScriptingButtonDown(index, playerColor)
     if hover and isValidLocation(hover) then
       table.insert(targets, hover)
     else
-      broadcastToColor("Select / hover one or two locations and try again.", playerColor, "Orange")
+      broadcastToColor(i18n.getStrById("PA_selectLocation"), playerColor, "Orange")
       return
     end
   end
@@ -120,9 +120,9 @@ function onScriptingButtonDown(index, playerColor)
     end
 
     if foundAny then
-      broadcastToColor("Toggled all relevant connections for " .. getCardName(guid), playerColor, "Green")
+      broadcastToColor(i18n.getStrById("PA_toggledConnections") .. getCardName(guid), playerColor, "Green")
     else
-      broadcastToColor("No relevant connections to toggle found for " .. getCardName(guid), playerColor, "Orange")
+      broadcastToColor(i18n.getStrById("PA_noConnections") .. getCardName(guid), playerColor, "Orange")
       return
     end
   elseif #targets == 2 then
@@ -177,7 +177,7 @@ function cyclePair(guidA, guidB, playerColor)
       middlePart       = (isForward == aLessThanB) and " -> " or " <- "
     end
 
-    broadcastToColor("Connection: " .. nameA .. middlePart .. nameB, playerColor, "White")
+    broadcastToColor(i18n.getStrById("PA_connection") .. nameA .. middlePart .. nameB, playerColor, "White")
   end
 end
 
