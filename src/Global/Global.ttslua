@@ -3606,7 +3606,9 @@ function libraryDownloadCallback(request)
   local jsonResponse = nil
   if pcall(function() jsonResponse = JSON.decode(request.text) end) then
     formatLibrary(jsonResponse)
-    injectKoreanLibraryEntries()
+    if optionPanel.uiLanguage == "ko" then
+      injectKoreanLibraryEntries()
+    end
     updateDownloadItemList()
     Wait.time(function() printToAll("XML UI initialized.", "Green") end, 0.3)
   else
