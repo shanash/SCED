@@ -434,6 +434,10 @@ I18N_DATA = {
     ["zh_CN"] = "arkham.build - linked: This content can be\nautomatically loaded when used in decks.",
     ["zh_TW"] = "arkham.build - linked: This content can be\nautomatically loaded when used in decks.",
   },
+  ["DW_autoPlaced"] = {
+    ["en"] = "Requested Content was automatically placed in the correct container.",
+    ["ko"] = "요청한 콘텐츠가 자동으로 올바른 컨테이너에 배치되었습니다.",
+  },
   ["DW_by"] = {
     ["de"] = "von",
     ["en"] = "by",
@@ -657,6 +661,10 @@ I18N_DATA = {
   ["KO_downloadStart"] = {
     ["en"] = "Downloading Korean language packs...",
     ["ko"] = "한국어 언어팩을 다운로드 중입니다...",
+  },
+  ["KO_replaced"] = {
+    ["en"] = "Replaced: ",
+    ["ko"] = "교체됨: ",
   },
   ["MA_advance_text"] = {
     ["de"] = "Vorrücken ↪",

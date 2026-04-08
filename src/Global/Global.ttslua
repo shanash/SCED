@@ -3449,7 +3449,7 @@ function replaceLangpackSceneObjects(jsonText)
             local rot = sceneObj.getRotation()
             sceneObj.destruct()
             spawnObjectData({ data = objData, position = pos, rotation = rot })
-            broadcastToAll("Replaced: " .. (replaceData.Nickname or md.id), "Green")
+            broadcastToAll(i18n.getStrById("KO_replaced") .. (replaceData.Nickname or md.id), "Green")
             found = true
             break
           end
@@ -3509,7 +3509,7 @@ function contentDownloadCallback(request, params)
       if referenceObject then
         spawnTable.position = referenceObject.getPosition() + Vector(0, 2, 0)
         spawnTable.rotation = referenceObject.getRotation()
-        printToAll("Requested Content was automatically placed in the correct container.")
+        printToAll(i18n.getStrById("DW_autoPlaced"))
       end
     else
       -- if position is undefined, get empty position
