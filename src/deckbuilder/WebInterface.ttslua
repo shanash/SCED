@@ -470,8 +470,10 @@ do
 
       onDeckResult(json, playerColor, loadNewest, standalone, callback)
     end, function(errorMessage, responseCode)
-      local responseText = errorMessage.message
-      if not responseText or string.find(responseText, "<!DOCTYPE html>") or string.find(responseText, "No share was found for this deck") then
+      local responseText = errorMessage and errorMessage.message
+      if not responseText then
+        maybePrint("Error: Failed to load deck " .. deckId .. " (" .. tostring(responseCode) .. ")", playerColor)
+      elseif string.find(responseText, "<!DOCTYPE html>") or string.find(responseText, "No share was found for this deck") then
         maybePrint("Private deck ID " .. deckId .. " is not shared.", playerColor)
       else
         maybePrint("Error: " .. responseText .. "(" .. responseCode .. ")", playerColor)
