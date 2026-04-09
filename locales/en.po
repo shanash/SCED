@@ -762,15 +762,6 @@ msgstr ""
 msgid "PA_readyCards"
 msgstr "Ready Cards in\nPlay Area ↺"
 
-# Korean Language Pack Download Messages
-msgid "KO_downloadStart"
-msgstr "Downloading Korean language packs..."
-
-msgid "KO_downloadFail"
-msgstr "Download failed: "
-
-msgid "KO_downloadManual"
-msgstr "Manual download: Download Window > Language Packs"
-
-msgid "KO_downloadComplete"
-msgstr "Korean language packs installed!"
+# Korean Language Pack Scene Replacement
+msgid "KO_replaced"
+msgstr "Replaced: "
