@@ -400,9 +400,9 @@ function updateDeckData(deckData)
         if state then
           changedSomething                   = true
 
-          -- store changed card IDs / new deck data
-          cardIdConversion[originalId]       = cardData.data["CardID"]
-          local customDeckId, customDeckData = next(cardData.data["CustomDeck"])
+          -- store changed card IDs / new deck data (read from modified objData, not index)
+          cardIdConversion[originalId]       = objData["CardID"]
+          local customDeckId, customDeckData = next(objData["CustomDeck"])
           newDeckData[customDeckId]          = customDeckData
         end
       end
@@ -435,7 +435,18 @@ function updateOriginalItemData(originalData, replaceData)
   -- handle data fields
   for _, dataKey in ipairs(REPLACEMENT_FIELDS) do
     if replaceData[dataKey] and replaceData[dataKey] ~= "" then
-      originalData[dataKey] = replaceData[dataKey]
+      if dataKey == "CustomDeck" then
+        -- deep copy to prevent index mutation via reference sharing
+        originalData[dataKey] = {}
+        for deckId, deckData in pairs(replaceData[dataKey]) do
+          originalData[dataKey][deckId] = {}
+          for k, v in pairs(deckData) do
+            originalData[dataKey][deckId][k] = v
+          end
+        end
+      else
+        originalData[dataKey] = replaceData[dataKey]
+      end
     end
   end
 
