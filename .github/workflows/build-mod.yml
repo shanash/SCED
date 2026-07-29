@@ -1,11 +1,25 @@
 name: build-mod
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build for (e.g., v4.8.0+korean.6)"
+        required: false
+        type: string
   release:
     types: [created]
   pull_request:
 
 permissions: read-all
+
+# Serialised with daily-upstream-sync.yml, which publishes release assets to this
+# same repo. PR builds get their own group per head ref so they never queue behind
+# a release build; release and dispatch builds must share the sync workflow's group
+# verbatim, or they do not actually interlock. `cancel-in-progress: false` because a
+# cancelled release build leaves the release without its mod JSON.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('korean-pr-{0}', github.head_ref) || 'korean-release-assets' }}
+  cancel-in-progress: false
 
 jobs:
   build-the-mod:
@@ -26,12 +40,25 @@ jobs:
 
       - name: Set dynamic filename
         id: filename
+        # Ref and tag names reach the script through `env:` rather than `${{ }}`
+        # interpolation, so a branch named `$(...)` cannot be executed as shell.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            stripped_name=$(echo "${{ github.event.release.tag_name }}" | sed -E 's/^[Vv]ersion[ ]*//')
+          if [ "$EVENT_NAME" == "release" ]; then
+            stripped_name=$(echo "$RELEASE_TAG" | sed -E 's/^[Vv]ersion[ ]*//')
             echo "filename=Arkham SCE ${stripped_name}.json" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" == "pull_request" ]; then
-            echo "filename=${{ github.head_ref }}.json" >> $GITHUB_ENV
+          elif [ "$EVENT_NAME" == "pull_request" ]; then
+            echo "filename=${HEAD_REF}.json" >> $GITHUB_ENV
+          elif [ "$EVENT_NAME" == "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
+            # Without this branch a dispatch against a tag ref attaches an asset
+            # named `output.json` instead of `Arkham SCE <tag>.json`, which makes
+            # the manual dispatch path unusable as a release fallback.
+            stripped_name=$(echo "$INPUT_TAG" | sed -E 's/^[Vv]ersion[ ]*//')
+            echo "filename=Arkham SCE ${stripped_name}.json" >> $GITHUB_ENV
           else
             echo "filename=output.json" >> $GITHUB_ENV
           fi
