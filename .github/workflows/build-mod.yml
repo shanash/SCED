@@ -64,7 +64,13 @@ jobs:
           fi
 
       - name: Run TTSModManager
-        run: ./TTSModManager-Linux -moddir="./" -modfile="./${{ env.filename }}"
+        # `$filename` is read as a real environment variable, NOT as a `${{ }}`
+        # template expression. Actions substitutes a template textually before bash
+        # parses the script, so interpolating this value -- which carries
+        # `github.head_ref` on the pull_request path -- would re-inject an
+        # attacker-controlled branch name into the script that the `env:` block in
+        # "Set dynamic filename" exists to keep out of it.
+        run: ./TTSModManager-Linux -moddir="./" -modfile="./$filename"
         shell: bash
 
       - name: Upload built mod
