@@ -1,0 +1,566 @@
+# daily-upstream-sync.yml — unattended upstream rebase + redeploy
+#
+# MUST live on the default branch (main): scheduled workflows only run from the
+# default branch. It is never merged into `korean`, so it cannot affect a rebase.
+#
+# Exit codes (surfaced in the log and the step summary):
+#    0  proceeded, or designed skip (no-op / overlap gate)
+#   20  upstream fetch failed
+#   30  rebase failed after the gate passed (unexpected)
+#   40  force-push rejected (lease conflict)
+#   50  tag derivation failed / tag already exists
+#   60  build failed
+#   63  pre-release asset verification failed
+#   70  release publish failed
+name: daily-upstream-sync
+
+on:
+  schedule:
+    - cron: "47 18 * * *"        # 18:47 UTC = 03:47 KST. Off-the-hour per R12.
+  workflow_dispatch:
+    inputs:
+      dry_run:      { description: "Plan only; no push, no release", type: boolean, default: true }
+      skip_release: { description: "Rebase and push korean, but do not release", type: boolean, default: false }
+      force:        { description: "Ignore the no-op guard (NEVER the overlap gate)", type: boolean, default: false }
+
+permissions: read-all
+
+concurrency:
+  group: korean-release-assets
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://github.com/Chr1Z93/SCED.git
+  WORK_BRANCH: korean
+  GATE_EXCLUDE_PATHSPECS: ""            # pressure valve, e.g. ":(exclude).gitignore"
+  TTS_MOD_MANAGER_VERSION: v1.3         # == releases/latest today (F7); pinned for determinism
+  SCED_BRANCH: main                     # argonui/SCED ref that SCED-downloads' `make init` clones (R8)
+  ASSET_FLOOR_PCT: "95"                 # asset-count regression floor, in percent of the previous release
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45                 # .git is 273 MB; fetch-depth:0 is the slow part
+    permissions:                        # job-level REPLACES top-level, so list everything
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      # ---------------------------------------------------------------- fetch
+      - name: Configure git and fetch upstream
+        id: fetch
+        shell: bash
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM_URL" 2>/dev/null || git remote set-url upstream "$UPSTREAM_URL"
+
+          # `--tags --force origin` guarantees every existing `+korean.*` tag is local
+          # (N derivation depends on it); `--prune` keeps the backup-retention list honest.
+          git fetch --prune --tags --force origin \
+            || { echo "::error::exit 20 — origin fetch failed"; exit 20; }
+          git fetch --tags upstream main \
+            || { echo "::error::exit 20 — upstream fetch failed"; exit 20; }
+          git rev-parse --verify origin/"$WORK_BRANCH" >/dev/null \
+            || { echo "::error::exit 20 — origin/$WORK_BRANCH does not exist"; exit 20; }
+
+          {
+            echo "upstream_sha=$(git rev-parse upstream/main)"
+            echo "upstream_date=$(git log -1 --format=%cI upstream/main)"
+            echo "fork_sha=$(git rev-parse origin/"$WORK_BRANCH")"
+          } >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------- guard
+      - name: No-op guard
+        id: guard
+        shell: bash
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          BEHIND="$(git rev-list --count origin/korean..upstream/main)"
+          TIP="$(git rev-parse origin/korean)"
+          if git tag --points-at "$TIP" | grep -q '+korean\.'; then HAS_REL=1; else HAS_REL=0; fi
+          NEEDS_REBASE=0;  [ "$BEHIND" -gt 0 ] && NEEDS_REBASE=1
+          NEEDS_RELEASE=0; [ "$HAS_REL" -eq 0 ] && NEEDS_RELEASE=1
+
+          {
+            echo "behind=$BEHIND"
+            echo "needs_rebase=$NEEDS_REBASE"
+            echo "needs_release=$NEEDS_RELEASE"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$NEEDS_REBASE" -eq 0 ] && [ "$NEEDS_RELEASE" -eq 0 ] && [ "${FORCE}" != "true" ]; then
+            echo "::notice::no-op — korean already contains upstream/main and is already released"
+            echo "decision=noop" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "::notice::behind=$BEHIND needs_rebase=$NEEDS_REBASE needs_release=$NEEDS_RELEASE force=${FORCE:-false}"
+          echo "decision=continue" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------------------------------------------- gate
+      # The core safety predicate (R3a, corrected per F2). `force` NEVER reaches
+      # this step: resolving an overlap requires a human on a real checkout.
+      - name: Overlap gate
+        id: gate
+        if: steps.guard.outputs.decision != 'noop'
+        shell: bash
+        run: |
+          MB="$(git merge-base origin/korean upstream/main)"
+
+          names() {  # $1 = ref
+            if [ -n "${GATE_EXCLUDE_PATHSPECS}" ]; then
+              # shellcheck disable=SC2086
+              git -c core.quotePath=false diff --no-renames --name-only "$MB" "$1" -- . ${GATE_EXCLUDE_PATHSPECS}
+            else
+              git -c core.quotePath=false diff --no-renames --name-only "$MB" "$1"
+            fi | LC_ALL=C sort -u
+          }
+
+          names origin/korean > "$RUNNER_TEMP/fork.txt"
+          names upstream/main > "$RUNNER_TEMP/upstream.txt"
+          LC_ALL=C comm -12 "$RUNNER_TEMP/fork.txt" "$RUNNER_TEMP/upstream.txt" > "$RUNNER_TEMP/overlap.txt"
+          COUNT="$(wc -l < "$RUNNER_TEMP/overlap.txt" | tr -d ' ')"
+
+          { echo "merge_base=$MB"; echo "overlap_count=$COUNT"; } >> "$GITHUB_OUTPUT"
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "::warning::overlap gate tripped — $COUNT file(s) modified by BOTH sides since $MB; korean left untouched"
+            echo "decision=skip" >> "$GITHUB_OUTPUT"
+            exit 0                       # designed outcome: GREEN run, not a failure
+          fi
+          echo "decision=proceed" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------------------- backup
+      - name: Push backup branch
+        id: backup
+        if: steps.gate.outputs.decision == 'proceed'
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          BACKUP="auto/korean-backup-$(date -u +%Y%m%d)"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::dry-run — would push backup branch $BACKUP"
+            echo "backup=$BACKUP (not pushed — dry run)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A plain (non-force) push is rejected if the branch already exists at a
+          # different commit; the fallback timestamps a second one (R11).
+          if ! git push origin "refs/remotes/origin/korean:refs/heads/${BACKUP}"; then
+            BACKUP="${BACKUP}-$(date -u +%H%M%SZ)"
+            git push origin "refs/remotes/origin/korean:refs/heads/${BACKUP}" || exit 40
+          fi
+          echo "backup=$BACKUP" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------------------- rebase
+      - name: Rebase korean onto upstream/main
+        id: rebase
+        if: steps.gate.outputs.decision == 'proceed'
+        shell: bash
+        run: |
+          git checkout -B korean origin/korean
+          if ! git rebase upstream/main; then
+            git rebase --abort || true
+            echo "::error::exit 30 — rebase failed AFTER a clean overlap gate — investigate"
+            echo "decision=rebase-failed" >> "$GITHUB_OUTPUT"; exit 30
+          fi
+          KOREAN_SHA="$(git rev-parse HEAD)"
+          echo "korean_sha=$KOREAN_SHA" >> "$GITHUB_OUTPUT"
+          echo "::notice::rebased korean onto upstream/main — new tip $KOREAN_SHA"
+
+      # ----------------------------------------------------------------- push
+      # Push happens before the build, deliberately: staying current is the cheap,
+      # safe half and must not be hostage to build flakiness. A pushed-but-unreleased
+      # `korean` has zero user impact; the NEEDS_RELEASE guard retries tomorrow.
+      - name: Force-push korean (explicit lease)
+        id: push
+        if: steps.gate.outputs.decision == 'proceed'
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::dry-run — would force-push korean to $(git rev-parse HEAD)"
+            exit 0
+          fi
+          # Explicit lease against the observed remote tip — the pattern hardened in
+          # recover-korean-from-backup.sh:118-136.
+          EXPECTED="$(git ls-remote origin refs/heads/korean | awk 'NR==1 {print $1}')" || exit 40
+          [ -n "$EXPECTED" ] || { echo "::error::exit 40 — could not read the remote korean tip"; exit 40; }
+          git push "--force-with-lease=refs/heads/korean:${EXPECTED}" origin "HEAD:refs/heads/korean" \
+            || { echo "::error::exit 40 — force-push rejected (lease conflict)"; exit 40; }
+
+      # ---------------------------------------------------------------- prune
+      # Glob-scoped to `auto/` so the hand-made `korean-rebase-backup-*` branches
+      # are permanently safe. Keeps the newest 14.
+      - name: Prune old auto backups
+        id: prune
+        if: steps.gate.outputs.decision == 'proceed' && inputs.dry_run != true
+        shell: bash
+        run: |
+          git for-each-ref --sort=-committerdate --format='%(refname:short)' 'refs/remotes/origin/auto/korean-backup-*' \
+            | sed 's|^origin/||' | tail -n +15 \
+            | while read -r b; do git push origin --delete "$b" || true; done
+
+      # ------------------------------------------------------------------ tag
+      - name: Derive release tag
+        id: tag
+        if: steps.gate.outputs.decision == 'proceed'
+        shell: bash
+        run: |
+          # --- TAG-BASE (SCED) ----------------------------------------------
+          # The base is MOD_VERSION from the REBASED tree, not a git tag.
+          # The nearest upstream tag is still computed (with the mandatory
+          # `--exclude '*korean*'`, F3) purely as a drift warning.
+          # `|| true` keeps a no-match from tripping `pipefail`+`errexit`, so the
+          # emptiness check below is what actually reports exit 50.
+          MOD_VERSION="$(grep -Eo '^MOD_VERSION[[:space:]]*=[[:space:]]*"[^"]+"' src/core/Constants.ttslua \
+                         | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+          [ -n "$MOD_VERSION" ] || { echo "::error::exit 50 — could not read MOD_VERSION"; exit 50; }
+          BASE="v${MOD_VERSION}"
+          UPTAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*korean*' HEAD || true)"
+          [ "$UPTAG" = "$BASE" ] || echo "::warning::MOD_VERSION ($BASE) != nearest upstream tag ($UPTAG)"
+          # --- end TAG-BASE -------------------------------------------------
+
+          LATEST="$(git tag -l "${BASE}+korean.*" | sort -V | tail -1)"
+          if [ -z "$LATEST" ]; then N=1
+          else
+            SUFFIX="${LATEST##*.}"
+            case "$SUFFIX" in ''|*[!0-9]*) echo "::error::exit 50 — unparsable tag $LATEST"; exit 50 ;; esac
+            N=$((SUFFIX + 1))
+          fi
+          TAG="${BASE}+korean.${N}"
+          git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null && { echo "::error::exit 50 — $TAG exists"; exit 50; }
+          PREV_TAG="${LATEST}"
+
+          { echo "base=$BASE"; echo "tag=$TAG"; echo "prev_tag=$PREV_TAG"; } >> "$GITHUB_OUTPUT"
+          echo "::notice::next release tag $TAG (base $BASE, previous ${PREV_TAG:-none})"
+
+      - uses: actions/setup-python@v6.2.0
+        if: steps.gate.outputs.decision == 'proceed' && inputs.skip_release != true
+        with:
+          python-version: "3.14"
+
+      # ---------------------------------------------------------------- build
+      - name: Build (pinned)
+        id: build
+        if: steps.gate.outputs.decision == 'proceed' && inputs.skip_release != true
+        shell: bash
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          KOREAN_SHA: ${{ steps.rebase.outputs.korean_sha }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # --- BUILD (SCED) -------------------------------------------------
+          # TTSModManager bundles the whole mod into a single JSON. The filename must
+          # match the release-event naming in `build-mod.yml:31-32`.
+          wget -q "https://github.com/argonui/TTSModManager/releases/download/${TTS_MOD_MANAGER_VERSION}/TTSModManager-Linux" \
+            || { echo "::error::exit 60 — could not download TTSModManager ${TTS_MOD_MANAGER_VERSION}"; exit 60; }
+          chmod +x TTSModManager-Linux
+          FILENAME="Arkham SCE ${TAG}.json"
+          ./TTSModManager-Linux -moddir="./" -modfile="./${FILENAME}" \
+            || { echo "::error::exit 60 — TTSModManager failed"; exit 60; }
+          echo "MOD_FILENAME=${FILENAME}" >> "$GITHUB_ENV"
+
+          PROVENANCE="TTSModManager=${TTS_MOD_MANAGER_VERSION}"
+          echo "build_provenance=$PROVENANCE" >> "$GITHUB_OUTPUT"
+          # --- end BUILD ----------------------------------------------------
+
+          {
+            echo "Automated Korean sync release — rebased \`korean\` onto \`upstream/main\`."
+            echo
+            echo "| item | value |"
+            echo "|---|---|"
+            echo "| tag | \`${TAG}\` |"
+            echo "| korean tip (rebased) | \`${KOREAN_SHA}\` |"
+            echo "| upstream tip | \`${UPSTREAM_SHA}\` |"
+            echo "| build provenance | ${PROVENANCE} |"
+            echo "| workflow run | ${RUN_URL} |"
+          } > "$RUNNER_TEMP/release-notes.md"
+
+      # --------------------------------------------------------------- verify
+      # Post-condition verify, reusing the `apply-card-decisions.sh` exit-63 idiom.
+      - name: Pre-release asset verification
+        id: verify
+        if: steps.gate.outputs.decision == 'proceed' && inputs.skip_release != true
+        shell: bash
+        env:
+          PREV_TAG: ${{ steps.tag.outputs.prev_tag }}
+        run: |
+          # --- VERIFY (SCED) ------------------------------------------------
+          # A single mod JSON. The 8 MB floor is calibrated against the real asset of
+          # `v4.8.0+korean.5` (11,738,304 B) and is precisely the detector for R5:
+          # TTSModManager silently producing no/short output on the case-sensitive runner.
+          [ -s "$MOD_FILENAME" ] \
+            || { echo "::error::exit 63 — $MOD_FILENAME is missing or empty"; exit 63; }
+          python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$MOD_FILENAME" \
+            || { echo "::error::exit 63 — $MOD_FILENAME is not valid JSON"; exit 63; }
+          SIZE=$(stat -c%s "$MOD_FILENAME")
+          [ "$SIZE" -ge 8000000 ] || { echo "::error::exit 63 — mod json is ${SIZE}B, floor 8 MB"; exit 63; }
+          N_NEW=1
+          # Informational only here — the 8 MB floor above is the real detector.
+          # PREV_TAG is the previous SAME-BASE tag and is empty on the first release
+          # of a new MOD_VERSION, so fall back to the live releases/latest.
+          PREV_REF="$PREV_TAG"
+          if [ -z "$PREV_REF" ]; then
+            PREV_REF="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+          fi
+          N_PREV=0
+          if [ -n "$PREV_REF" ]; then
+            N_PREV="$(gh release view "$PREV_REF" --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+          fi
+          echo "::notice::mod json $MOD_FILENAME is ${SIZE}B; baseline ${PREV_REF:-none} = ${N_PREV} asset(s)"
+          # --- end VERIFY ---------------------------------------------------
+
+          { echo "asset_count=$N_NEW"; echo "prev_asset_count=$N_PREV"; } >> "$GITHUB_OUTPUT"
+
+      # -------------------------------------------------------------- release
+      # A draft is excluded from `releases/latest` AND does not create the git tag,
+      # so there is no window in which a partial release is live (R10).
+      - name: Publish draft release
+        id: release
+        uses: softprops/action-gh-release@v3.0.0
+        if: steps.gate.outputs.decision == 'proceed' && inputs.dry_run != true && inputs.skip_release != true
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ steps.rebase.outputs.korean_sha }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            ${{ env.MOD_FILENAME }}
+
+      # --------------------------------------------------------------- golive
+      - name: Flip draft to live
+        id: golive
+        if: steps.gate.outputs.decision == 'proceed' && inputs.dry_run != true && inputs.skip_release != true
+        shell: bash
+        env:
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+        run: |
+          [ -n "$RELEASE_ID" ] || { echo "::error::exit 70 — the publish step returned no release id"; exit 70; }
+          RELEASE_URL="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+                          -F draft=false -f make_latest=true --jq '.html_url')" \
+            || { echo "::error::exit 70 — could not flip release ${RELEASE_ID} to live"; exit 70; }
+          echo "release_url=$RELEASE_URL" >> "$GITHUB_OUTPUT"
+          echo "::notice::release live — $RELEASE_URL"
+
+      # --------------------------------------------------------------- notify
+      # Dedup is by LABEL, not by title — one open Issue per (repo, failure kind).
+      - name: Notify / reconcile tracking issue
+        id: notify
+        if: always()
+        shell: bash
+        env:
+          DRY_RUN:        ${{ inputs.dry_run }}
+          GATE_DECISION:  ${{ steps.gate.outputs.decision }}
+          OUT_FETCH:      ${{ steps.fetch.outcome }}
+          OUT_GUARD:      ${{ steps.guard.outcome }}
+          OUT_GATE:       ${{ steps.gate.outcome }}
+          OUT_BACKUP:     ${{ steps.backup.outcome }}
+          OUT_REBASE:     ${{ steps.rebase.outcome }}
+          OUT_PUSH:       ${{ steps.push.outcome }}
+          OUT_TAG:        ${{ steps.tag.outcome }}
+          OUT_BUILD:      ${{ steps.build.outcome }}
+          OUT_VERIFY:     ${{ steps.verify.outcome }}
+          OUT_RELEASE:    ${{ steps.release.outcome }}
+          OUT_GOLIVE:     ${{ steps.golive.outcome }}
+          MERGE_BASE:     ${{ steps.gate.outputs.merge_base }}
+          OVERLAP_COUNT:  ${{ steps.gate.outputs.overlap_count }}
+          UPSTREAM_SHA:   ${{ steps.fetch.outputs.upstream_sha }}
+          UPSTREAM_DATE:  ${{ steps.fetch.outputs.upstream_date }}
+          FORK_SHA:       ${{ steps.fetch.outputs.fork_sha }}
+          TAG:            ${{ steps.tag.outputs.tag }}
+          RUN_URL:        ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Failure kind, mapped 1:1 onto the header block's exit codes.
+          KIND=""
+          if [ "$GATE_DECISION" = "skip" ]; then
+            KIND="overlap"                                                     # gate tripped (exit 0, green)
+          elif [ "$OUT_FETCH" = "failure" ] || [ "$OUT_GUARD" = "failure" ] || [ "$OUT_GATE" = "failure" ]; then
+            KIND="fetch-failed"                                                # 20
+          elif [ "$OUT_BACKUP" = "failure" ] || [ "$OUT_REBASE" = "failure" ] || [ "$OUT_PUSH" = "failure" ]; then
+            KIND="rebase-failed"                                               # 30 / 40
+          elif [ "$OUT_TAG" = "failure" ] || [ "$OUT_BUILD" = "failure" ]; then
+            KIND="build-failed"                                                # 50 / 60
+          elif [ "$OUT_VERIFY" = "failure" ]; then
+            KIND="verify-failed"                                               # 63
+          elif [ "$OUT_RELEASE" = "failure" ] || [ "$OUT_GOLIVE" = "failure" ]; then
+            KIND="release-failed"                                              # 70
+          fi
+          echo "kind=$KIND" >> "$GITHUB_OUTPUT"
+
+          REPO_SHORT="${GITHUB_REPOSITORY##*/}"
+          BODY="$RUNNER_TEMP/issue-body.md"
+          {
+            echo "## Automated upstream sync — \`${KIND:-ok}\`"
+            echo
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| run | ${RUN_URL} |"
+            echo "| merge-base | \`${MERGE_BASE:-n/a}\` |"
+            echo "| upstream tip | \`${UPSTREAM_SHA:-n/a}\` (${UPSTREAM_DATE:-n/a}) |"
+            echo "| fork tip (\`korean\`) | \`${FORK_SHA:-n/a}\` |"
+            echo "| overlapping files | ${OVERLAP_COUNT:-n/a} |"
+            echo
+          } > "$BODY"
+
+          if [ -s "$RUNNER_TEMP/overlap.txt" ]; then
+            {
+              echo "### Overlapping paths (first 50, grouped by directory)"
+              echo
+              echo '```'
+              head -50 "$RUNNER_TEMP/overlap.txt" | awk '
+                { p = $0; d = p
+                  if (sub(/\/[^\/]*$/, "", d) == 0) d = "."
+                  f = p; sub(/.*\//, "", f)
+                  if (d != prev) { print d "/"; prev = d }
+                  print "    " f }'
+              echo '```'
+              echo
+            } >> "$BODY"
+          fi
+
+          {
+            echo "### Local triage"
+            echo
+            echo '```bash'
+            echo "SCED-tools/scripts/check-upstream-overlap.sh --repo ${REPO_SHORT}"
+            echo '```'
+            echo
+            echo "### Hint"
+            echo
+            # --- ISSUE-HINT (SCED) --------------------------------------------
+            echo "If the overlap is under \`objects/InvestigatorTokens.0203af*\`, upstream has landed the"
+            echo "case rename that the fork carries locally; drop the fork's \`8e4ca17a\` with:"
+            echo
+            echo '```bash'
+            echo "git rebase --onto upstream/main 8e4ca17a korean"
+            echo '```'
+            # --- end ISSUE-HINT -----------------------------------------------
+            echo
+            echo "---"
+            echo
+            echo "The overlap gate is **not bypassable** from the workflow — \`force\` overrides only the"
+            echo "no-op guard. Resolve the overlap on a real checkout; the next scheduled run resumes"
+            echo "automatically once the merge-base has moved."
+          } >> "$BODY"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::dry-run — would reconcile the tracking issue (kind='${KIND:-ok}'); body follows"
+            cat "$BODY"
+            exit 0
+          fi
+
+          gh label create auto-sync --color BFD4F2 --description "Automated upstream sync" 2>/dev/null || true
+          [ -z "$KIND" ] || gh label create "auto-sync:${KIND}" --color D93F0B \
+            --description "Automated upstream sync: ${KIND}" 2>/dev/null || true
+
+          case "$KIND" in
+            "")   # success — close every open auto-sync issue
+              for n in $(gh issue list --label auto-sync --state open --json number --jq '.[].number' 2>/dev/null || true); do
+                gh issue close "$n" --comment "Resolved: published ${TAG:-nothing to release} — ${RUN_URL}" || true
+              done ;;
+            *)
+              NUM="$(gh issue list --label "auto-sync:${KIND}" --state open --limit 1 --json number --jq '.[0].number // empty' 2>/dev/null || true)"
+              if [ -n "$NUM" ]; then gh issue comment "$NUM" --body-file "$BODY"
+              else gh issue create --title "[auto-sync] ${KIND}: korean not synced" \
+                     --label auto-sync --label "auto-sync:${KIND}" --body-file "$BODY" \
+                   || { echo "::error::could not open an Issue (are Issues enabled? see F1)"; exit 1; }
+              fi ;;
+          esac
+
+      # -------------------------------------------------------------- summary
+      - name: Write run summary
+        if: always()
+        shell: bash
+        env:
+          DRY_RUN:          ${{ inputs.dry_run }}
+          SKIP_RELEASE:     ${{ inputs.skip_release }}
+          FORCE:            ${{ inputs.force }}
+          GUARD_DECISION:   ${{ steps.guard.outputs.decision }}
+          GATE_DECISION:    ${{ steps.gate.outputs.decision }}
+          BEHIND:           ${{ steps.guard.outputs.behind }}
+          MERGE_BASE:       ${{ steps.gate.outputs.merge_base }}
+          OVERLAP_COUNT:    ${{ steps.gate.outputs.overlap_count }}
+          UPSTREAM_SHA:     ${{ steps.fetch.outputs.upstream_sha }}
+          UPSTREAM_DATE:    ${{ steps.fetch.outputs.upstream_date }}
+          FORK_SHA:         ${{ steps.fetch.outputs.fork_sha }}
+          KOREAN_SHA:       ${{ steps.rebase.outputs.korean_sha }}
+          BACKUP:           ${{ steps.backup.outputs.backup }}
+          TAG:              ${{ steps.tag.outputs.tag }}
+          PREV_TAG:         ${{ steps.tag.outputs.prev_tag }}
+          PROVENANCE:       ${{ steps.build.outputs.build_provenance }}
+          ASSET_COUNT:      ${{ steps.verify.outputs.asset_count }}
+          PREV_ASSET_COUNT: ${{ steps.verify.outputs.prev_asset_count }}
+          RELEASE_URL:      ${{ steps.golive.outputs.release_url }}
+          NOTIFY_KIND:      ${{ steps.notify.outputs.kind }}
+          OUT_FETCH:        ${{ steps.fetch.outcome }}
+          OUT_GUARD:        ${{ steps.guard.outcome }}
+          OUT_GATE:         ${{ steps.gate.outcome }}
+          OUT_BACKUP:       ${{ steps.backup.outcome }}
+          OUT_REBASE:       ${{ steps.rebase.outcome }}
+          OUT_PUSH:         ${{ steps.push.outcome }}
+          OUT_TAG:          ${{ steps.tag.outcome }}
+          OUT_BUILD:        ${{ steps.build.outcome }}
+          OUT_VERIFY:       ${{ steps.verify.outcome }}
+          OUT_RELEASE:      ${{ steps.release.outcome }}
+          OUT_GOLIVE:       ${{ steps.golive.outcome }}
+        run: |
+          DECISION="${GATE_DECISION:-${GUARD_DECISION:-not reached}}"
+          {
+            echo "## daily-upstream-sync — ${GITHUB_REPOSITORY}"
+            echo
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| decision | \`${DECISION}\` |"
+            echo "| dry run / skip release / force | \`${DRY_RUN:-false}\` / \`${SKIP_RELEASE:-false}\` / \`${FORCE:-false}\` |"
+            echo "| behind (korean..upstream) | ${BEHIND:-n/a} |"
+            echo "| merge-base | \`${MERGE_BASE:-n/a}\` |"
+            echo "| overlapping files | ${OVERLAP_COUNT:-n/a} |"
+            echo "| upstream tip | \`${UPSTREAM_SHA:-n/a}\` (${UPSTREAM_DATE:-n/a}) |"
+            echo "| korean tip before | \`${FORK_SHA:-n/a}\` |"
+            echo "| korean tip after rebase | \`${KOREAN_SHA:-n/a}\` |"
+            echo "| backup branch | \`${BACKUP:-none}\` |"
+            echo "| tag | \`${TAG:-none}\` (previous \`${PREV_TAG:-none}\`) |"
+            echo "| build provenance | ${PROVENANCE:-n/a} |"
+            echo "| assets | ${ASSET_COUNT:-n/a} (previous release ${PREV_ASSET_COUNT:-n/a}) |"
+            echo "| release | ${RELEASE_URL:-none} |"
+            echo "| tracking issue kind | \`${NOTIFY_KIND:-none}\` |"
+            echo
+            echo "### Phase outcomes"
+            echo
+            echo "| step | outcome | exit code on failure |"
+            echo "|---|---|---|"
+            echo "| fetch upstream | ${OUT_FETCH:-skipped} | 20 |"
+            echo "| no-op guard | ${OUT_GUARD:-skipped} | — |"
+            echo "| overlap gate | ${OUT_GATE:-skipped} | — |"
+            echo "| backup branch | ${OUT_BACKUP:-skipped} | 40 |"
+            echo "| rebase | ${OUT_REBASE:-skipped} | 30 |"
+            echo "| force-push | ${OUT_PUSH:-skipped} | 40 |"
+            echo "| derive tag | ${OUT_TAG:-skipped} | 50 |"
+            echo "| build | ${OUT_BUILD:-skipped} | 60 |"
+            echo "| asset verification | ${OUT_VERIFY:-skipped} | 63 |"
+            echo "| publish draft | ${OUT_RELEASE:-skipped} | 70 |"
+            echo "| flip to live | ${OUT_GOLIVE:-skipped} | 70 |"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DECISION" = "skip" ] && [ -s "$RUNNER_TEMP/overlap.txt" ]; then
+            {
+              echo "### Overlapping paths (first 50)"
+              echo
+              echo '```'
+              head -50 "$RUNNER_TEMP/overlap.txt"
+              echo '```'
+              echo
+              echo "Triage locally: \`SCED-tools/scripts/check-upstream-overlap.sh --repo ${GITHUB_REPOSITORY##*/}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
