@@ -23,6 +23,18 @@ concurrency:
 
 jobs:
   build-the-mod:
+    # The local nightly driver (SCED-tools/scripts/daily-sync-local.sh) builds this
+    # release's asset, verifies it against the server-side asset count, and only then
+    # flips the draft live. Rebuilding here would replace a verified artifact with an
+    # unverified one. The driver marks its own releases in the body; a release made by
+    # hand carries no marker and still builds exactly as before. Releases made by
+    # daily-upstream-sync.yml use GITHUB_TOKEN, which suppresses the event outright.
+    #
+    # Evaluated before checkout, which also stops the `created` (draft) event from
+    # failing on a tag that does not exist yet.
+    if: >-
+      github.event_name != 'release' ||
+      !contains(github.event.release.body, 'sced-local-sync: assets-already-attached')
     runs-on: ubuntu-latest
     permissions:
       contents: write
