@@ -307,13 +307,18 @@ jobs:
           # Informational only here — the 8 MB floor above is the real detector.
           # PREV_TAG is the previous SAME-BASE tag and is empty on the first release
           # of a new MOD_VERSION, so fall back to the live releases/latest.
+          # -R is mandatory: gh's repo auto-detection does not survive the rebase
+          # step's `checkout -B`, and a swallowed failure silently reports 0 assets.
           PREV_REF="$PREV_TAG"
           if [ -z "$PREV_REF" ]; then
-            PREV_REF="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+            PREV_REF="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
           fi
           N_PREV=0
           if [ -n "$PREV_REF" ]; then
-            N_PREV="$(gh release view "$PREV_REF" --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+            if ! N_PREV="$(gh release view "$PREV_REF" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"; then
+              echo "::warning::could not read the asset list of ${PREV_REF} — baseline unavailable"
+              N_PREV=0
+            fi
           fi
           echo "::notice::mod json $MOD_FILENAME is ${SIZE}B; baseline ${PREV_REF:-none} = ${N_PREV} asset(s)"
           # --- end VERIFY ---------------------------------------------------
