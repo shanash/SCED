@@ -1,7 +1,11 @@
 # daily-upstream-sync.yml — unattended upstream rebase + redeploy
 #
-# MUST live on the default branch (main): scheduled workflows only run from the
-# default branch. It is never merged into `korean`, so it cannot affect a rebase.
+# MUST live on the default branch (korean): scheduled workflows only ever run
+# from the default branch, and a workflow file that is not on it is not
+# registered at all -- `gh workflow list` omits it and the cron never fires,
+# silently. It therefore rides the branch it rebases, which makes it one more
+# path in the fork-changed set: an upstream file at this path would trip the
+# overlap gate. Upstream has none.
 #
 # Exit codes (surfaced in the log and the step summary):
 #    0  proceeded, or designed skip (no-op / overlap gate)
