@@ -388,6 +388,13 @@ jobs:
           FORK_SHA:       ${{ steps.fetch.outputs.fork_sha }}
           TAG:            ${{ steps.tag.outputs.tag }}
           RUN_URL:        ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # gh resolves its base repo from git remotes and, in non-interactive
+          # mode with an `upstream` remote present (added by the fetch step),
+          # picks `upstream` -- i.e. Chr1Z93/*, where this token has no write
+          # access. Every label/issue call below silently targeted the PARENT
+          # repository until 2026-08-01. Same lesson as the `-R` at the release
+          # steps ("gh's repo auto-detection does not survive the rebase").
+          GH_REPO:        ${{ github.repository }}
         run: |
           # Failure kind, mapped 1:1 onto the header block's exit codes.
           KIND=""
@@ -448,10 +455,12 @@ jobs:
             echo
             # --- ISSUE-HINT (SCED) --------------------------------------------
             echo "If the overlap is under \`objects/InvestigatorTokens.0203af*\`, upstream has landed the"
-            echo "case rename that the fork carries locally; drop the fork's \`8e4ca17a\` with:"
+            echo "case rename that the fork carries locally; drop the fork's own rename commit. Its SHA"
+            echo "changes on every rebase, so derive it rather than pasting one:"
             echo
             echo '```bash'
-            echo "git rebase --onto upstream/main 8e4ca17a korean"
+            echo "DROP=\$(git log --format=%H --grep='rename InvestigatorTokens object files' -1 upstream/main..korean)"
+            echo "git rebase --onto upstream/main \"\$DROP\" korean"
             echo '```'
             # --- end ISSUE-HINT -----------------------------------------------
             echo
@@ -468,9 +477,20 @@ jobs:
             exit 0
           fi
 
-          gh label create auto-sync --color BFD4F2 --description "Automated upstream sync" 2>/dev/null || true
-          [ -z "$KIND" ] || gh label create "auto-sync:${KIND}" --color D93F0B \
-            --description "Automated upstream sync: ${KIND}" 2>/dev/null || true
+          # Not `2>/dev/null || true`: that is what hid a year of 403s. Already-exists
+          # is the only benign failure, so report anything else as a warning.
+          ensure_label() {  # $1 = name, $2 = colour, $3 = description
+            # `tr -d` + `head -c` before the splice: a newline in gh's stderr followed
+            # by `::error::` or `::add-mask::` would forge a second workflow command.
+            # Same class as 94bb6402 (script injection through TTSModManager's args);
+            # gh's own error text is not attacker-supplied today, so this closes the
+            # pattern rather than a live hole.
+            gh label create "$1" --color "$2" --description "$3" >/dev/null 2>"$RUNNER_TEMP/label.err" \
+              || grep -qi 'already exists' "$RUNNER_TEMP/label.err" \
+              || echo "::warning::could not create label '$1': $(tr -d '\r\n' < "$RUNNER_TEMP/label.err" | head -c 200)"
+          }
+          ensure_label auto-sync BFD4F2 "Automated upstream sync"
+          [ -z "$KIND" ] || ensure_label "auto-sync:${KIND}" D93F0B "Automated upstream sync: ${KIND}"
 
           case "$KIND" in
             "")   # success — close every open auto-sync issue
@@ -482,7 +502,17 @@ jobs:
               if [ -n "$NUM" ]; then gh issue comment "$NUM" --body-file "$BODY"
               else gh issue create --title "[auto-sync] ${KIND}: korean not synced" \
                      --label auto-sync --label "auto-sync:${KIND}" --body-file "$BODY" \
-                   || { echo "::error::could not open an Issue (are Issues enabled? see F1)"; exit 1; }
+                   || {
+                        # An overlap trip is a DESIGNED skip and must finish green
+                        # (CLAUDE.md "Overlap gate"). Failing to file its tracking
+                        # Issue is worth a loud annotation, never a red build.
+                        if [ "$KIND" = "overlap" ]; then
+                          echo "::warning::overlap stall recorded, but the tracking Issue could not be created (labels / Issues enabled / GH_REPO?)"
+                        else
+                          echo "::error::could not open an Issue for kind='${KIND}'"
+                          exit 1
+                        fi
+                      }
               fi ;;
           esac
 
