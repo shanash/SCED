@@ -456,11 +456,15 @@ jobs:
             # --- ISSUE-HINT (SCED) --------------------------------------------
             echo "If the overlap is under \`objects/InvestigatorTokens.0203af*\`, upstream has landed the"
             echo "case rename that the fork carries locally; drop the fork's own rename commit. Its SHA"
-            echo "changes on every rebase, so derive it rather than pasting one:"
+            echo "changes on every rebase, so derive it rather than pasting one. Drop it in **two**"
+            echo "steps: a single \`--onto upstream/main \"\$DROP\" korean\` replays only"
+            echo "\`\$DROP..korean\`, which excludes the older \`SOURCE_REPO\` commit and would silently"
+            echo "revert the fork's reason for existing."
             echo
             echo '```bash'
             echo "DROP=\$(git log --format=%H --grep='rename InvestigatorTokens object files' -1 upstream/main..korean)"
-            echo "git rebase --onto upstream/main \"\$DROP\" korean"
+            echo "git rebase --onto \"\${DROP}^\" \"\${DROP}\" korean   # drop ONLY \$DROP"
+            echo "git rebase upstream/main                        # then rebase the remainder"
             echo '```'
             # --- end ISSUE-HINT -----------------------------------------------
             echo
